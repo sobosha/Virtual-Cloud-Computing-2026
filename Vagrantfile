@@ -1,77 +1,106 @@
-# -*- mode: ruby -*-
-# vi: set ft=ruby :
+# Set the default provider (virtualbox, vmware_desktop, libvirt)
+provider = ENV['VAGRANT_DEFAULT_PROVIDER'] || 'virtualbox'
+# Set the number of worker nodes
+NUM_TARGET=2
+# Set default RAM and CPU values (worker nodes)
+RAM_SIZE=1024
+CPU_COUNT=2
+# Set the default RAM and CPU values (control node)
+CONTROL_RAM_SIZE=1024
+CONTROL_CPU_COUNT=1
+# if exists, upload this public key to the VMs (Windows path example)
+KEY_FILE_PATH = "C:\\Users\\HP\\.ssh\\id_ed25519.pub"
+# Set the network configuration (prefixes)
+WORKLOAD_NET = "192.168.255"
+STORAGE_NET  = "10.10.255"
+# Set the box name and version
+BOX = "enricorusso/VCCubuntu"
+BOX_VERSION = "24.04.3"
 
-# All Vagrant configuration is done below. The "2" in Vagrant.configure
-# configures the configuration version (we support older styles for
-# backwards compatibility). Please don't change it unless you know what
-# you're doing.
+unless ['vmware_desktop', 'virtualbox', 'libvirt'].include?(provider)
+  raise "This Vagrantfile is not compatible with the '#{provider}' provider. Please use 'vmware_desktop', 'virtualbox', or 'libvirt'."
+end
+
 Vagrant.configure("2") do |config|
-  # The most common configuration options are documented and commented below.
-  # For a complete reference, please see the online documentation at
-  # https://docs.vagrantup.com.
+  config.vm.box = BOX
+  config.vm.box_version = BOX_VERSION
+  config.vm.box_architecture = "amd64"
 
-  # Every Vagrant development environment requires a box. You can search for
-  # boxes at https://vagrantcloud.com/search.
-  config.vm.box = "base"
+  config.vm.hostname = "default"
+  config.vm.synced_folder ".", "/vagrant" # , disabled: true
 
-  # Disable automatic box update checking. If you disable this, then
-  # boxes will only be checked for updates when the user runs
-  # `vagrant box outdated`. This is not recommended.
-  # config.vm.box_check_update = false
+  case provider
+  when 'vmware_desktop'
+    config.vm.provider "vmware_desktop" do |vmw|
+      vmw.gui = true
+      vmw.memory = RAM_SIZE
+      vmw.cpus = CPU_COUNT
+    end
 
-  # Create a forwarded port mapping which allows access to a specific port
-  # within the machine from a port on the host machine. In the example below,
-  # accessing "localhost:8080" will access port 80 on the guest machine.
-  # NOTE: This will enable public access to the opened port
-  # config.vm.network "forwarded_port", guest: 80, host: 8080
+  when 'virtualbox'
+    config.vm.provider "virtualbox" do |vb|
+      vb.gui = true
+      vb.memory = RAM_SIZE
+      vb.cpus = CPU_COUNT
+    end
 
-  # Create a forwarded port mapping which allows access to a specific port
-  # within the machine from a port on the host machine and only allow access
-  # via 127.0.0.1 to disable public access
-  # config.vm.network "forwarded_port", guest: 80, host: 8080, host_ip: "127.0.0.1"
+  when 'libvirt'
+    config.vm.provider "libvirt" do |lv|
+      lv.memory = RAM_SIZE
+      lv.cpus = CPU_COUNT
+    end
+  end
 
-  # Create a private network, which allows host-only access to the machine
-  # using a specific IP.
-  # config.vm.network "private_network", ip: "192.168.33.10"
+  (1..NUM_TARGET).each do |i|
+    config.vm.define "node#{i}" do |node|
+      node.vm.hostname = "node#{i}"
 
-  # Create a public network, which generally matched to bridged network.
-  # Bridged networks make the machine appear as another physical device on
-  # your network.
-  # config.vm.network "public_network"
+      if provider == 'vmware_desktop'
+        node.vm.network "private_network", ip: "#{WORKLOAD_NET}.1#{i}", mac: "DEADBEEF000#{i}", vmware_network: "VMnet2"
+        node.vm.network "private_network", ip: "#{STORAGE_NET}.1#{i}",  mac: "CAFEBABE000#{i}", vmware_network: "VMnet3"
+      else
+        node.vm.network "private_network", ip: "#{WORKLOAD_NET}.1#{i}", mac: "DEADBEEF000#{i}"
+        node.vm.network "private_network", ip: "#{STORAGE_NET}.1#{i}",  mac: "CAFEBABE000#{i}"
+      end
 
-  # Share an additional folder to the guest VM. The first argument is
-  # the path on the host to the actual folder. The second argument is
-  # the path on the guest to mount the folder. And the optional third
-  # argument is a set of non-required options.
-  # config.vm.synced_folder "../data", "/vagrant_data"
+      if File.exist?(KEY_FILE_PATH)
+        node.vm.provision :file, :source => "#{KEY_FILE_PATH}", :destination => "/tmp/id.pub"
+        node.vm.provision :shell, :inline => "cat /tmp/id.pub >> ~vagrant/.ssh/authorized_keys", :privileged => false
+      end
 
-  # Disable the default share of the current code directory. Doing this
-  # provides improved isolation between the vagrant box and your host
-  # by making sure your Vagrantfile isn't accessible to the vagrant box.
-  # If you use this you may want to enable additional shared subfolders as
-  # shown above.
-  # config.vm.synced_folder ".", "/vagrant", disabled: true
+      (1..NUM_TARGET).each do |i|
+        node.vm.provision :shell, :inline => "grep #{WORKLOAD_NET}.1#{i} /etc/hosts || echo '#{WORKLOAD_NET}.1#{i} node#{i}.vcc.local node#{i}' >> /etc/hosts"
+      end
 
-  # Provider-specific configuration so you can fine-tune various
-  # backing providers for Vagrant. These expose provider-specific options.
-  # Example for VirtualBox:
-  #
-  # config.vm.provider "virtualbox" do |vb|
-  #   # Display the VirtualBox GUI when booting the machine
-  #   vb.gui = true
-  #
-  #   # Customize the amount of memory on the VM:
-  #   vb.memory = "1024"
-  # end
-  #
-  # View the documentation for the provider you are using for more
-  # information on available options.
+      node.vm.provision :shell, :inline => "grep #{STORAGE_NET}.10 /etc/hosts || echo '#{STORAGE_NET}.10 storage.vcc.local storage' >> /etc/hosts"
+    end
+  end
 
-  # Enable provisioning with a shell script. Additional provisioners such as
-  # Ansible, Chef, Docker, Puppet and Salt are also available. Please see the
-  # documentation for more information about their specific syntax and use.
-  # config.vm.provision "shell", inline: <<-SHELL
-  #   apt-get update
-  #   apt-get install -y apache2
-  # SHELL
+  config.vm.define "control" do |control|
+    control.vm.hostname = "controlnode"
+
+    if provider == 'vmware_desktop'
+      control.vm.network "private_network", ip: "#{WORKLOAD_NET}.10", mac: "DEADBEEF000C", vmware_network: "VMnet2"
+      control.vm.network "private_network", ip: "#{STORAGE_NET}.10",  mac: "CAFEBABE000C", vmware_network: "VMnet3"
+    else
+      control.vm.network "private_network", ip: "#{WORKLOAD_NET}.10", mac: "DEADBEEF000C"
+      control.vm.network "private_network", ip: "#{STORAGE_NET}.10",  mac: "CAFEBABE000C"
+    end
+
+    if File.exist?(KEY_FILE_PATH)
+      control.vm.provision :file, :source => "#{KEY_FILE_PATH}", :destination => "/tmp/id.pub"
+      control.vm.provision :shell, :inline => "cat /tmp/id.pub >> ~vagrant/.ssh/authorized_keys", :privileged => false
+    end
+
+    control.vm.provision :shell, :inline => "apt-get update; apt-get -y install ansible sshpass make"
+    control.vm.provision :shell, :inline => "test -f /home/vagrant/.ssh/id_rsa || ssh-keygen -f /home/vagrant/.ssh/id_rsa -q -P \"\"", :privileged => false
+    control.vm.provision :shell, :inline => "grep #{WORKLOAD_NET}.10 /etc/hosts || echo '#{WORKLOAD_NET}.10 controlnode.vcc.local controlnode' >> /etc/hosts"
+    control.vm.provision :shell, :inline => "grep #{STORAGE_NET}.10 /etc/hosts || echo '#{STORAGE_NET}.10 storage.vcc.local storage' >> /etc/hosts"
+    control.vm.provision :shell, :inline => "echo -e '[defaults]\nhost_key_checking = False' >> ~/.ansible.cfg", :privileged => false
+
+    (1..NUM_TARGET).each do |i|
+      control.vm.provision :shell, :inline => "sshpass -p vagrant ssh-copy-id -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -f vagrant@#{WORKLOAD_NET}.1#{i}", :privileged => false
+      control.vm.provision :shell, :inline => "grep #{WORKLOAD_NET}.1#{i} /etc/hosts || echo '#{WORKLOAD_NET}.1#{i} node#{i}.vcc.local node#{i}' >> /etc/hosts"
+    end
+  end
 end
