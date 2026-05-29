@@ -70,6 +70,8 @@ Vagrant.configure("2") do |config|
 
       (1..NUM_TARGET).each do |i|
         node.vm.provision :shell, :inline => "grep #{WORKLOAD_NET}.1#{i} /etc/hosts || echo '#{WORKLOAD_NET}.1#{i} node#{i}.vcc.local node#{i}' >> /etc/hosts"
+        node.vm.provision :shell, :inline => "grep  registry.vcc.local /etc/hosts || echo '127.0.0.1  registry.vcc.local registry' >> /etc/hosts"
+        node.vm.provision :shell, :inline => "apt-get update; apt-get -y install rsync"
       end
 
       node.vm.provision :shell, :inline => "grep #{STORAGE_NET}.10 /etc/hosts || echo '#{STORAGE_NET}.10 storage.vcc.local storage' >> /etc/hosts"
@@ -92,7 +94,7 @@ Vagrant.configure("2") do |config|
       control.vm.provision :shell, :inline => "cat /tmp/id.pub >> ~vagrant/.ssh/authorized_keys", :privileged => false
     end
 
-    control.vm.provision :shell, :inline => "apt-get update; apt-get -y install ansible sshpass make"
+    control.vm.provision :shell, :inline => "apt-get update; apt-get -y install python3.12-venv sshpass make"
     control.vm.provision :shell, :inline => "test -f /home/vagrant/.ssh/id_rsa || ssh-keygen -f /home/vagrant/.ssh/id_rsa -q -P \"\"", :privileged => false
     control.vm.provision :shell, :inline => "grep #{WORKLOAD_NET}.10 /etc/hosts || echo '#{WORKLOAD_NET}.10 controlnode.vcc.local controlnode' >> /etc/hosts"
     control.vm.provision :shell, :inline => "grep #{STORAGE_NET}.10 /etc/hosts || echo '#{STORAGE_NET}.10 storage.vcc.local storage' >> /etc/hosts"

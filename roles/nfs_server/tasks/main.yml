@@ -1,0 +1,42 @@
+---
+# TODO: implement the tasks for NFS server setup
+
+- name: "Create NFS share directory"
+  ansible.builtin.file:
+    path: "{{ nfs_dir }}" # we have this value in defaults/main.yml
+    state: directory
+    mode: '0777' #rwx
+
+- name: Install NFS server
+  ansible.builtin.apt:
+    name: nfs-kernel-server
+    state: present # make sure package is installed
+    update_cache: yes # we update lib before installation
+
+#
+- name: Configure exports
+  ansible.builtin.template:
+    src: exports # we use the exports file in the templates directory
+    dest: /etc/exports # we put the file in /etc/exports
+  notify: Restart NFS server # we notify the handler to restart the NFS server
+
+- name: Start NFS server
+  ansible.builtin.service:
+    name: nfs-kernel-server
+    state: started
+    enabled: yes
+
+## check exports
+- block:
+  - name: Apply notifiers
+    ansible.builtin.meta: flush_handlers
+  - name: Get verbose export list
+    ansible.builtin.command: exportfs -v
+    register: exportfs_verbose
+    changed_when: false
+  - name: Assert that the export exists with correct options
+    ansible.builtin.assert:
+      that:
+        - exportfs_verbose.stdout is search(storage_network | regex_escape ~ '\\s*\\(.*rw.*no_root_squash.*\\)')
+      fail_msg: "Export for {{ storage_network }} is missing or has incorrect options"
+  when: enable_asserts

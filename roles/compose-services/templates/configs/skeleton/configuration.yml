@@ -1,0 +1,5 @@
+---
+# this is a skeleton configuration file
+ip_address: "{{ workload_IP }}"
+db_server: "db.{{ domain_name }}"
+db_password: "{{ skeleton_db_password }}"

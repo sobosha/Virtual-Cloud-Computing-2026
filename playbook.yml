@@ -1,0 +1,19 @@
+---
+# main playbook
+- hosts: storage
+  gather_facts: no
+  become: true
+  roles:
+    - network_facts
+    - nfs_server
+
+- hosts: targets
+  gather_facts: no
+  become: true
+  roles:
+    - { role: network_facts, tags: ['services', 'deploy'] }
+    - datadir
+    - nfs_client
+    - docker
+    - { role: docker-images, tags: ['images', 'deploy'] }
+    - { role: compose-services, tags: ['services', 'deploy'] }

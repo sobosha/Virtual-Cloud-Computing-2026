@@ -1,0 +1,17 @@
+services:
+  skeleton:
+    image: skeleton
+    hostname: skeleton
+    environment:
+      SKELETON_ENV_VAR: "{{ skeleton_env_var }}"
+    volumes:
+      - "{{ data_dir }}/configs/skeleton:/config"
+#   ports:
+#      - "8080:80"
+    networks:
+      net:
+        aliases:
+          - "skeleton.{{ domain_name }}"
+
+networks:
+  net:

@@ -1,0 +1,60 @@
+---
+# networks
+workload_network: 192.168.255.0/24
+storage_network: 10.10.255.0/24
+
+# domain name
+domain_name: vcc.local
+
+# docker images to build using files in roles/docker-images/files/images/[image_name]
+docker_build_images:
+   - skeleton
+
+# build args for each image
+docker_build_args:
+  skeleton:
+    UBUNTU_VERSION: "22.04"
+    DUMMY_VERSION: "456"
+  other_image_name:
+    ARG_NAME: "value"
+
+# data directory: where persistent data is stored on each target node
+data_dir: "/data"
+
+#### COMPOSE #####
+
+# compose services configuration
+# Create directories to persist container data on {{ data_dir }}/[data_directory]
+compose_data_directories: []
+compose_nuke_data_directories: true # you WILL lose your data
+
+# List of directories to copy files from roles/compose-services/templates/configs/[config_directory]
+# to {{ data_dir }}/configs/[config_directory] applying templating
+compose_config_directories:
+  - skeleton
+compose_nuke_config_directories: true # you WILL lose your data
+
+# List of files to deploy the compose from roles/compose-services/templates/
+compose_file_names:
+  - docker-compose.yml
+compose_recreate: true # redeploy the compose stack
+
+# Enable/disable asserts 
+enable_asserts: true
+
+# Production/Development mode
+production_mode: false
+
+# Services variables (environment variables/config files)
+skeleton_env_var: "This is a skeleton service"
+# Sensitive data should be stored using ansible-vault! (enable vault in Makefile with USEVAULT=1)
+skeleton_db_password: "{{ vaulted_skeleton_db_password if production_mode else 'NOTsecurepass' }}"
+
+# ansible-vault encrypt_string --ask-vault-pass 'securepass' --name 'password'
+vaulted_skeleton_db_password: !vault |
+          $ANSIBLE_VAULT;1.1;AES256
+          38323863343461396435336338363762326332623865616261383035303136326130376332663065
+          3864313238393536303832306639613466363738383234380a303434303135393939646538363838
+          36633365636433376162613535633430306562643265383234643365313430386431643030366333
+          6161333063663866330a313663383739623638303366363766326237396337636662336566626236
+          3231
