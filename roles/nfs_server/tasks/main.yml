@@ -1,5 +1,5 @@
 ---
-# TODO: implement the tasks for NFS server setup
+# TODO[VCC-003]: Implement tasks for NFS server setup
 
 - name: "Create NFS share directory"
   ansible.builtin.file:
@@ -24,7 +24,7 @@
   ansible.builtin.service:
     name: nfs-kernel-server
     state: started
-    enabled: yes
+    enabled: yes #start NFS server at boot automatically
 
 ## check exports
 - block:

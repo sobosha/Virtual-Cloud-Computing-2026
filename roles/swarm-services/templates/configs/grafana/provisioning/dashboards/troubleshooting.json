@@ -1,0 +1,44 @@
+{
+    "title": "Troubleshooting",
+    "uid": "troubleshooting",
+    "refresh": "5s",
+    "panels": [
+        {
+            "title": "Forgejo Request Rate",
+            "type": "timeseries",
+            "id": 1,
+            "gridPos": {
+                "h": 8,
+                "w": 24,
+                "x": 0,
+                "y": 0
+            },
+            "datasource": "Prometheus",
+            "targets": [
+                {
+                    "expr": "sum by(code) (rate(promhttp_metric_handler_requests_total{job=\"forgejo_exporter\"}[1m]))",
+                    "legendFormat": "requests/sec",
+                    "refId": "A"
+                }
+            ]
+        },
+        {
+            "title": "Forgejo Logs",
+            "type": "logs",
+            "id": 2,
+            "gridPos": {
+                "h": 10,
+                "w": 24,
+                "x": 0,
+                "y": 8
+            },
+            "datasource": "Loki",
+            "targets": [
+                {
+                    "expr": "{service_name=\"vcc_forgejo\"}",
+                    "refId": "A"
+                }
+            ]
+        }
+    ]
+}

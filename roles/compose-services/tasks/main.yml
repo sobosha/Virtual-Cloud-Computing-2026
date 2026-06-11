@@ -20,7 +20,6 @@
     state: absent
   loop: "{{ compose_data_directories + ['configs' if compose_nuke_config_directories else ''] }}"
   when: compose_nuke_data_directories
-  run_once: true # only run once since it's the same on all targets, race condition happened before
 
 - name: Create data directories in {{ data_dir }}
   ansible.builtin.file:

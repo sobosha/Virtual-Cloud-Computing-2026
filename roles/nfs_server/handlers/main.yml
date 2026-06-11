@@ -1,9 +1,5 @@
 ---
 - name: Restart NFS server
-  ansible.builtin.service:
-    name: nfs-kernel-server
+  ansible.builtin.systemd:
+    name: nfs-kernel-server.service
     state: restarted
-
-# TODO: handlers file for roles/nfs_server
-# When the exports config changes, the notify in
-# the template task triggers this handler to restart NFS server

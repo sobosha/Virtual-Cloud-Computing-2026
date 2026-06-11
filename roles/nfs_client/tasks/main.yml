@@ -1,5 +1,5 @@
 ---
-# TODO: implement the tasks for NFS client setup. Make sure to use the storage network for NFS mount
+# TODO[VCC-002]: Implement tasks for NFS client setup. Make sure to use the storage network for NFS mount
 
 - name: "Create NFS share directory"
   ansible.builtin.file:
@@ -21,8 +21,6 @@
     fstype: nfs
     opts: defaults
     state: mounted # we mount the share dir
-    
-
 
 ## check mount
 - block:

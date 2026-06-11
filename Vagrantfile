@@ -4,7 +4,7 @@ provider = ENV['VAGRANT_DEFAULT_PROVIDER'] || 'virtualbox'
 NUM_TARGET=2
 # Set default RAM and CPU values (worker nodes)
 RAM_SIZE=1024
-CPU_COUNT=2
+CPU_COUNT=1
 # Set the default RAM and CPU values (control node)
 CONTROL_RAM_SIZE=1024
 CONTROL_CPU_COUNT=1
@@ -13,6 +13,8 @@ KEY_FILE_PATH = "C:\\Users\\HP\\.ssh\\id_ed25519.pub"
 # Set the network configuration (prefixes)
 WORKLOAD_NET = "192.168.255"
 STORAGE_NET  = "10.10.255"
+# Domain name
+DOMAIN_NAME = "vcc.local"
 # Set the box name and version
 BOX = "enricorusso/VCCubuntu"
 BOX_VERSION = "24.04.3"
@@ -69,12 +71,15 @@ Vagrant.configure("2") do |config|
       end
 
       (1..NUM_TARGET).each do |i|
-        node.vm.provision :shell, :inline => "grep #{WORKLOAD_NET}.1#{i} /etc/hosts || echo '#{WORKLOAD_NET}.1#{i} node#{i}.vcc.local node#{i}' >> /etc/hosts"
-        node.vm.provision :shell, :inline => "grep  registry.vcc.local /etc/hosts || echo '127.0.0.1  registry.vcc.local registry' >> /etc/hosts"
-        node.vm.provision :shell, :inline => "apt-get update; apt-get -y install rsync"
+        node.vm.provision :shell, :inline => "grep #{WORKLOAD_NET}.1#{i} /etc/hosts || echo '#{WORKLOAD_NET}.1#{i} node#{i}.#{DOMAIN_NAME} node#{i}' >> /etc/hosts"
+        node.vm.provision :shell, :inline => "grep  registry.#{DOMAIN_NAME} /etc/hosts || echo '127.0.0.1  registry.#{DOMAIN_NAME} registry' >> /etc/hosts"
+        node.vm.provision :shell, :inline => "apt-get update; apt-get -y install rsync ntpdate"
+        node.vm.provision :shell, :inline => "timedatectl set-ntp true"
       end
 
-      node.vm.provision :shell, :inline => "grep #{STORAGE_NET}.10 /etc/hosts || echo '#{STORAGE_NET}.10 storage.vcc.local storage' >> /etc/hosts"
+      node.vm.provision :shell, :inline => "grep #{STORAGE_NET}.10 /etc/hosts || echo '#{STORAGE_NET}.10 storage.#{DOMAIN_NAME} storage' >> /etc/hosts"
+      node.vm.provision :shell, :inline => "grep  www.#{DOMAIN_NAME} /etc/hosts || echo '192.168.255.100  www.#{DOMAIN_NAME} auth.#{DOMAIN_NAME} git.#{DOMAIN_NAME} mon.#{DOMAIN_NAME}' >> /etc/hosts"
+      node.vm.provision :shell, :inline => "rm -f /etc/apt/apt.conf.d/20auto-upgrades"
     end
   end
 
@@ -94,15 +99,18 @@ Vagrant.configure("2") do |config|
       control.vm.provision :shell, :inline => "cat /tmp/id.pub >> ~vagrant/.ssh/authorized_keys", :privileged => false
     end
 
-    control.vm.provision :shell, :inline => "apt-get update; apt-get -y install python3.12-venv sshpass make"
+    control.vm.provision :shell, :inline => "apt-get update; apt-get -y install python3.12-venv sshpass make ntpdate"
     control.vm.provision :shell, :inline => "test -f /home/vagrant/.ssh/id_rsa || ssh-keygen -f /home/vagrant/.ssh/id_rsa -q -P \"\"", :privileged => false
-    control.vm.provision :shell, :inline => "grep #{WORKLOAD_NET}.10 /etc/hosts || echo '#{WORKLOAD_NET}.10 controlnode.vcc.local controlnode' >> /etc/hosts"
-    control.vm.provision :shell, :inline => "grep #{STORAGE_NET}.10 /etc/hosts || echo '#{STORAGE_NET}.10 storage.vcc.local storage' >> /etc/hosts"
+    control.vm.provision :shell, :inline => "grep #{WORKLOAD_NET}.10 /etc/hosts || echo '#{WORKLOAD_NET}.10 controlnode.#{DOMAIN_NAME} controlnode' >> /etc/hosts"
+    control.vm.provision :shell, :inline => "grep #{STORAGE_NET}.10 /etc/hosts || echo '#{STORAGE_NET}.10 storage.#{DOMAIN_NAME} storage' >> /etc/hosts"
+    control.vm.provision :shell, :inline => "grep  registry.#{DOMAIN_NAME} /etc/hosts || echo '127.0.0.1  registry.#{DOMAIN_NAME} registry' >> /etc/hosts"
+    control.vm.provision :shell, :inline => "grep  www.#{DOMAIN_NAME} /etc/hosts || echo '192.168.255.100  www.#{DOMAIN_NAME} auth.#{DOMAIN_NAME} git.#{DOMAIN_NAME} mon.#{DOMAIN_NAME}' >> /etc/hosts"
+    control.vm.provision :shell, :inline => "rm -f /etc/apt/apt.conf.d/20auto-upgrades"
     control.vm.provision :shell, :inline => "echo -e '[defaults]\nhost_key_checking = False' >> ~/.ansible.cfg", :privileged => false
-
+    control.vm.provision :shell, :inline => "timedatectl set-ntp true"
     (1..NUM_TARGET).each do |i|
       control.vm.provision :shell, :inline => "sshpass -p vagrant ssh-copy-id -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -f vagrant@#{WORKLOAD_NET}.1#{i}", :privileged => false
-      control.vm.provision :shell, :inline => "grep #{WORKLOAD_NET}.1#{i} /etc/hosts || echo '#{WORKLOAD_NET}.1#{i} node#{i}.vcc.local node#{i}' >> /etc/hosts"
+      control.vm.provision :shell, :inline => "grep #{WORKLOAD_NET}.1#{i} /etc/hosts || echo '#{WORKLOAD_NET}.1#{i} node#{i}.#{DOMAIN_NAME} node#{i}' >> /etc/hosts"
     end
   end
 end

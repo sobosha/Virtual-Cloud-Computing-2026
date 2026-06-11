@@ -66,13 +66,12 @@
     groups: docker
     append: yes
 
-
 - name: Check if docker command exists
   ansible.builtin.shell: "command -v docker"
   register: docker_check
   ignore_errors: yes
 
-- name: Assert docker is NOT installed
+- name: Verify Docker is installed
   ansible.builtin.assert:
     that:
       - docker_check.rc == 0

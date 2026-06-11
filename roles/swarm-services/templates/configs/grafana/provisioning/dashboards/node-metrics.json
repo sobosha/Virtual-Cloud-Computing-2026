@@ -1,0 +1,83 @@
+{
+    "title": "Node Metrics",
+    "uid": "node-metrics",
+    "refresh": "5s",
+    "panels": [
+        {
+            "title": "CPU Usage %",
+            "type": "timeseries",
+            "id": 1,
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 0,
+                "y": 0
+            },
+            "datasource": "Prometheus",
+            "targets": [
+                {
+                    "expr": "100 - (avg by(host) (rate(node_cpu_seconds_total{mode=\"idle\"}[1m])) * 100)",
+                    "legendFormat": "{% raw %}{{ host }}{% endraw %}",
+                    "refId": "A"
+                }
+            ]
+        },
+        {
+            "title": "Memory Usage %",
+            "type": "timeseries",
+            "id": 2,
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 12,
+                "y": 0
+            },
+            "datasource": "Prometheus",
+            "targets": [
+                {
+                    "expr": "(1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100",
+                    "legendFormat": "{% raw %}{{ host }}{% endraw %}",
+                    "refId": "A"
+                }
+            ]
+        },
+        {
+            "title": "Disk Usage %",
+            "type": "gauge",
+            "id": 3,
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 0,
+                "y": 8
+            },
+            "datasource": "Prometheus",
+            "targets": [
+                {
+                    "expr": "(1 - node_filesystem_avail_bytes{mountpoint=\"/etc/hostname\"} / node_filesystem_size_bytes{mountpoint=\"/etc/hostname\"}) * 100",
+                    "legendFormat": "{% raw %}{{ host }}{% endraw %}",
+                    "refId": "A"
+                }
+            ]
+        },
+        {
+            "title": "Network Received",
+            "type": "timeseries",
+            "id": 4,
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 12,
+                "y": 8
+            },
+            "datasource": "Prometheus",
+            "targets": [
+                {
+                    "expr": "sum by(host) (rate(node_network_receive_bytes_total{device!=\"lo\"}[1m]))",
+                    "legendFormat": "{% raw %}{{ host }}{% endraw %}",
+                    "refId": "A"
+                }
+            ]
+        }
+    ]
+}

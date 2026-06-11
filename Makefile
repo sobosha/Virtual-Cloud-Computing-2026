@@ -2,7 +2,7 @@ define RUN_ANSIBLE
 ( \
 	export ANSIBLE_LOG_PATH=$(ANSIBLE_LOG_PATH); \
 	. $(VENV_PATH)/bin/activate; \
-	ansible-playbook -i $(INVENTORY) $(VAULT_OPT) $(ARGS) playbook.yml; \
+	ansible-playbook -i $(INVENTORY) $(VAULT_OPT) $(ARGS) -v playbook.yml; \
 )
 endef
 
@@ -66,29 +66,20 @@ registry: .venv
 
 .PHONY: images
 images: .venv
-	$(eval ARGS := --tags "images" -v)
+	$(eval ARGS := --tags "images")
 	$(RUN_ANSIBLE)
 
 .PHONY: services
 services: .venv
-	$(eval ARGS := --tags "services" -v)
+	$(eval ARGS := --tags "services")
 	$(RUN_ANSIBLE)
 
 .PHONY: deploy
 deploy: .venv
-	$(eval ARGS := --tags "deploy" -v)
+	$(eval ARGS := --tags "deploy")
 	$(RUN_ANSIBLE)
 
-# ifeq ($(USEVAULT),1)
-# 	( \
-# 		export ANSIBLE_LOG_PATH=$(ANSIBLE_LOG_PATH); \
-# 		. $(VENV_PATH)/bin/activate; \
-# 		ansible-playbook -i $(INVENTORY) --ask-vault-pass -v playbook.yml \
-# 	)
-# else
-# 	( \
-# 		export ANSIBLE_LOG_PATH=$(ANSIBLE_LOG_PATH); \
-# 		. $(VENV_PATH)/bin/activate; \
-# 		ansible-playbook -i $(INVENTORY) -v playbook.yml \
-# 	)
-# endif
+.PHONY: update
+update: .venv
+	. $(VENV_PATH)/bin/activate; \
+		ansible-playbook -i $(INVENTORY) -e "full=false" -v updateservices-playbook.yml

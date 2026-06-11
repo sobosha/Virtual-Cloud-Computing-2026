@@ -1,0 +1,13 @@
+---
+# TODO[VCC-004]: Generate a jwks key for OIDC (RSA 4096 bits)
+- name: Create JWKS key directory
+  ansible.builtin.file:
+    path: "{{ jwks_key_path }}"
+    state: directory
+    mode: "0755"
+
+- name: Generate JWKS private key
+  community.crypto.openssl_privatekey:
+    path: "{{ jwks_key_path }}/jwks.key"
+    size: 4096
+    mode: "0600"

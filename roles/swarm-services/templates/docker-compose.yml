@@ -1,0 +1,106 @@
+services:
+  db:
+    # TODO[VCC-012]: Configure docker compose for postgres
+    image: postgres:16
+    environment:
+      POSTGRES_DB: "{{ db_name }}"
+      POSTGRES_USER: "{{ db_user }}"
+      POSTGRES_PASSWORD: "{{ db_password }}"
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: any
+    volumes:
+      - "{{ data_dir }}/pgdata:/var/lib/postgresql/data"
+      - "{{ data_dir }}/configs/pgsql:/docker-entrypoint-initdb.d:ro"
+    networks:
+      net:
+
+  forgejo:
+    # TODO[VCC-013]: Configure docker compose for forgejo
+    image: "{{ registry_address }}/forgejo"
+    healthcheck:
+      test: [ "CMD", "wget", "--no-verbose", "--spider", "http://localhost:{{ forgejo_port }}/" ]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 15s
+    deploy:
+      replicas: 2
+      restart_policy:
+        condition: any
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.forgejo.rule=Host(`git.{{ domain_name }}`)"
+        - "traefik.http.routers.forgejo.entrypoints=websecure"
+        - "traefik.http.routers.forgejo.tls=true"
+        - "traefik.http.services.forgejo.loadbalancer.server.port={{ forgejo_port }}"
+    environment:
+      DB_USER: "{{ db_user }}"
+      DB_PASS: "{{ db_password }}"
+      DB_HOST: "{{ db_host }}"
+      DB_PORT: "{{ db_port }}"
+      DB_NAME: "{{ db_name }}"
+      FORGEJO_ADMIN_USER: "{{ forgejo_admin_username }}"
+      FORGEJO_ADMIN_PASSWORD: "{{ forgejo_admin_password }}"
+      FORGEJO_ADMIN_EMAIL: "{{ forgejo_admin_email }}"
+      FORGEJO_AUTH_URL: "{{ authelia_url }}"
+      FORGEJO_OIDC_CLIENT_ID: "{{ forgejo_oidc_client_id }}"
+      FORGEJO_OIDC_CLIENT_SECRET: "{{ forgejo_oidc_client_secret }}"
+    extra_hosts:
+      # Since Traefik runs only on node1 (manager) in host-port mode,
+      # using 'host-gateway' would fail on node2 because port 443 is closed there.
+      # We use the Keepalived VIP to ensure any node routes auth traffic to Traefik.
+      - "auth.{{ domain_name }}:{{ keepalive_virtual_ip }}"
+      - "git.{{ domain_name }}:{{ keepalive_virtual_ip }}"
+      - "mon.{{ domain_name }}:{{ keepalive_virtual_ip }}"
+    volumes:
+      - "{{ data_dir }}/forgejo:/data"
+      - "{{ data_dir }}/configs/forgejo/forgejo.ini:/conf/app.ini:ro"
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+      - "{{ data_dir }}/certs/wildcard.crt:/usr/local/share/ca-certificates/wildcard.crt:ro"
+    networks:
+      net:
+
+  redis:
+    image: redis:7-alpine
+    command: [ "redis-server", "--appendonly", "yes" ]
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: any
+    volumes:
+      - "{{ data_dir }}/redis:/data"
+    networks:
+      - net
+
+  authelia:
+    # TODO[VCC-014]: Configure docker compose for authelia
+    image: "{{ registry_address }}/authelia"
+    healthcheck:
+      test: [ "CMD", "wget", "--no-verbose", "--spider", "http://localhost:{{ authelia_port }}/api/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+    secrets:
+      - jwks_key
+    environment:
+      TZ: "Europe/Rome"
+    deploy:
+      replicas: 2
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.authelia.rule=Host(`auth.{{ domain_name }}`)"
+        - "traefik.http.routers.authelia.entrypoints=websecure"
+        - "traefik.http.routers.authelia.tls=true"
+        - "traefik.http.services.authelia.loadbalancer.server.port={{ authelia_port }}"
+    volumes:
+      - "{{ data_dir }}/configs/authelia:/config"
+    networks:
+      net:
+
+secrets:
+  jwks_key:
+    file: "{{ data_dir }}/jwks/jwks.key"

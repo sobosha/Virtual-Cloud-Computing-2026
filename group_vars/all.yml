@@ -1,4 +1,7 @@
 ---
+# include control node in targets (used for three node swarm setups)
+include_controlnode_in_targets: false
+
 # networks
 workload_network: 192.168.255.0/24
 storage_network: 10.10.255.0/24
@@ -8,8 +11,9 @@ domain_name: vcc.local
 
 # docker images to build using files in roles/docker-images/files/images/[image_name]
 docker_build_images:
-   - forgejo
-   - authelia
+  - forgejo
+  - authelia
+  - grafana
 
 # build args for each image
 docker_build_args:
@@ -17,33 +21,100 @@ docker_build_args:
     VERSION: "11.0.8"
   authelia:
     VERSION: "4.39.14"
+  grafana:
+    VERSION: "12.3.0"
 
 # data directory: where persistent data is stored on each target node
 data_dir: "/data"
 
 #### COMPOSE #####
 
-# compose services configuration
+# # compose services configuration
+# # Create directories to persist container data on {{ data_dir }}/[data_directory]
+# compose_data_directories:
+#   - mysql
+# compose_nuke_data_directories: true # you WILL lose your data
+
+# # List of directories to copy files from roles/compose-services/templates/configs/[config_directory]
+# # to {{ data_dir }}/configs/[config_directory] applying templating
+# compose_config_directories:
+#   - wordpress
+#   - certs
+#   - traefik
+#   - authelia
+# compose_nuke_config_directories: true # you WILL lose your data
+
+# # List of files to deploy the compose from roles/compose-services/templates/
+# compose_file_names:
+#   - docker-compose.yml
+#   - traefik-compose.yml
+#   - authelia-compose.yml
+# compose_recreate: true # redeploy the compose stack
+
+#### SWARM #####
+
+# keepalive settings (VRRP): provide a single virtual IP for the swarm
+keepalive_virtual_ip: 192.168.255.100
+keepalive_auth_pass: "{{ vaulted_keepalive_auth_pass if production_mode else 'secretpass' }}"
+vaulted_keepalive_auth_pass: !vault |
+          $ANSIBLE_VAULT;1.1;AES256
+          63666433613631316634636131393638383632346661366338346266623839326263653239336337
+          3162363339383737323439313733326166663834613766300a643939353530313665633366393362
+          61353366333763663465316261666636333266616432373566653334646135326263376366303464
+          6161633962343837390a313964613666363934613835653433613930653934666235383830643166
+          6231
+# registry settings: private docker registry for swarm nodes
+use_private_registry: true
+registry_address: "registry.{{ domain_name }}:5000"
+registry_nuke_data_directory: true
+
+# swarm settings
+swarm_force_reinit: true # force reinitialization of swarm on all nodes
+
+# swarm services configuration
 # Create directories to persist container data on {{ data_dir }}/[data_directory]
-compose_data_directories:
+stack_data_directories:
   - pgdata
   - forgejo
-compose_nuke_data_directories: true # you WILL lose your data
+  - redis
+  - grafana
+  - loki_data
+  - prometheus_data
+stack_nuke_data_directories: true # you WILL lose your data
 
-# List of directories to copy files from roles/compose-services/templates/configs/[config_directory]
+# Set specific ownership/permissions for data directories
+stack_dir_permissions:
+  grafana:
+    owner: "472"
+    group: "472"
+    mode: "0750"
+  loki_data:
+    owner: "10001"
+    group: "10001"
+    mode: "0750"
+  prometheus_data:
+    owner: "65534"
+    group: "65534"
+    mode: "0750"
+
+# List of directories to copy files from roles/swarm-services/templates/configs/[config_directory]
 # to {{ data_dir }}/configs/[config_directory] applying templating
-compose_config_directories:
+stack_config_directories: 
   - traefik
   - pgsql
   - authelia
   - forgejo
-compose_nuke_config_directories: true # you WILL lose your data
+  - grafana
+  - alloy
+  - prometheus
+stack_nuke_config_directories: true # you WILL lose your data
 
-# List of files to deploy the compose from roles/compose-services/templates/
-compose_file_names:
-  - traefik-compose.yml
-  - part3-compose.yml # uncomment to enable part3 services
-compose_recreate: true # redeploy the compose stack
+# List of compose files to deploy the stack from roles/swarm-services/templates/
+stack_file_names:
+   - traefik-compose.yml
+   - monitoring-compose.yml
+   - docker-compose.yml
+stack_recreate: true
 
 # Enable/disable asserts 
 enable_asserts: true
@@ -52,22 +123,43 @@ enable_asserts: true
 production_mode: false
 
 # Services variables (environment variables/config files)
+
 # postgres
 db_user: forgejo
-db_password: forgejo_pass
+db_password: "{{ vaulted_db_password if production_mode else 'forgejo_pass' }}"
+vaulted_db_password: !vault |
+          $ANSIBLE_VAULT;1.1;AES256
+          66613665316136306432323633346466323636343139346431393162386133356363653438396361
+          3938313566346265663533373761643236336164646366620a616331356665303832343766656461
+          62643233396335396162376332653734643761653462313264386666613664316363636139363830
+          3566653464613266370a393136376564373138346366343663333965346332353131663234343732
+          3463
 db_name: forgejo
+db_host: db
+db_port: 5432
 
 # authelia
 authelia_db_user: authelia
-authelia_db_password: authelia_pass
+authelia_db_password: "{{ vaulted_authelia_db_password if production_mode else 'authelia_pass' }}"
+vaulted_authelia_db_password: !vault |
+          $ANSIBLE_VAULT;1.1;AES256
+          64323463316436623666336639633966326539623465343733353361383434346330393938333534
+          6237643265373765306362633033303039326537336437630a363863313064633536646630393139
+          35373062393764303738326339333562366331326134316132336235343032326163643265353039
+          3935636632636161610a636135336235613732323939363732616265353039386131373866343934
+          6232
 authelia_db: autheliadb
 authelia_url: "https://auth.{{ domain_name }}"
+authelia_port: 9091
+authelia_port_metrics: 9959
+# this path is for the Ansible role to generate the jwks key
+jwks_key_path: "{{ data_dir }}/jwks/"
 # OIDC clients list
 authelia_oidc_clients:
   # forgejo client
   - id: "{{ forgejo_oidc_client_id}}"
     secret: "{{ forgejo_oidc_client_secret }}"
-    token_endpoint_auth_method: "client_secret_basic"
+    token_endpoint_auth_method: "client_secret_post"
     authorization_policy: "one_factor"
     public: false
     redirect_uris:
@@ -77,12 +169,96 @@ authelia_oidc_clients:
       - "profile"
       - "email"
       - "groups"
+  # grafana client
+  # TODO [VCC-016b]: Add grafana OIDC client configuration
+  - id: "{{ grafana_oidc_client_id }}"
+    secret: "{{ grafana_oidc_client_secret }}"
+    # TODO fix: Grafana's OIDC client sends credentials in the POST request body.
+    # We must match it here so Authelia doesn't reject the token exchange.
+    token_endpoint_auth_method: "client_secret_post"
+    authorization_policy: "one_factor"
+    public: false
+    redirect_uris:
+      - "https://mon.{{ domain_name }}/login/generic_oauth"
+    scopes:
+      - "openid"
+      - "profile"
+      - "email"
+      - "groups"
 
+  
 # forgejo
 # admin and root are reserved names
 forgejo_admin_username: siteadmin
-forgejo_admin_password: admin
+forgejo_admin_password: "{{ vaulted_forgejo_admin_password if production_mode else 'admin' }}"
+vaulted_forgejo_admin_password: !vault |
+          $ANSIBLE_VAULT;1.1;AES256
+          35316637326465313063333964623135313063613666363764643661613666613533373035306565
+          6365333338636364633239356431653733633865376235610a366539653739303663623131356132
+          30656436663064643162373738373363646363333166346366613133363466393063303737363332
+          3966333631393338360a393536343838636231366333613033396362373963623732613066323436
+          6538
 forgejo_admin_email: admin@{{ domain_name }}
 forgejo_oidc_url: "{{ authelia_url }}"
 forgejo_oidc_client_id: forgejo
-forgejo_oidc_client_secret: forgejo_secret
+forgejo_oidc_client_secret: "{{ vaulted_forgejo_oidc_client_secret if production_mode else 'forgejo_secret' }}"
+vaulted_forgejo_oidc_client_secret: !vault |
+          $ANSIBLE_VAULT;1.1;AES256
+          66346535376234323063643666643232373236306664343434353530616538333338613266646536
+          3339643030636337333834633637356635363365303065630a313565343563346663313162336234
+          35343333663437326462663263666630393536393837353234633932336133653532623737666537
+          3633306239376336340a386637303533303436636166376338346137353137356232653531653233
+          66613835656566656165333138326163616232346430383938613530333430353666
+forgejo_port: 3200
+
+# grafana
+grafana_admin_user: admin
+grafana_admin_password: "{{ vaulted_grafana_admin_password if production_mode else 'admin' }}"
+vaulted_grafana_admin_password: !vault |
+          $ANSIBLE_VAULT;1.1;AES256
+          66333032343165613338613336383461303161323162323964616364396365316536666634646664
+          6531356132663238333038653263653662373531643361340a313838643362366135393934633466
+          64643233306238343136303139393565333164346536333939376266633431656639393666353561
+          3763626136393633640a333261633563663063376535366363303937623333633364633465626631
+          3463
+grafana_db_user: grafana
+grafana_db_password: "{{ vaulted_grafana_db_password if production_mode else 'grafana_pass' }}"
+vaulted_grafana_db_password: !vault |
+          $ANSIBLE_VAULT;1.1;AES256
+          37643831656266663434666362383162646630623065306361636464323961623132633962623439
+          6462373830393163623738663762343036316166346166330a613537613264383437636534313462
+          64393561373835366666646431663964326435623830633564353264616133323832653966623263
+          6663303235663635650a373631633562363435313437323664653233666230393765643535653164
+          3235
+grafana_db: grafanadb
+grafana_oidc_client_id: grafana
+grafana_oidc_client_secret: "{{ vaulted_grafana_oidc_client_secret if production_mode else 'grafana_secret' }}"
+vaulted_grafana_oidc_client_secret: !vault |
+          $ANSIBLE_VAULT;1.1;AES256
+          37386366393565383835376635613237613339366234393430663231366633613332623931336138
+          6530333435343339316638633161653962303764393133390a636661353836326565616530326139
+          39333339353130643632336134356464386635643664633739623566346164343630626362306237
+          6166663730666235330a663335653538376633313834326637393638653766393538303363356235
+          62636462373566363530643534633533666439336463393565333731393462613130
+grafana_port: 3000
+
+# alloy
+alloy_port: 9000
+# change to reduce scrape frequency and resource usage 
+# (e.g., "data throughput is very high" warning)
+alloy_scrape_interval: 15s
+alloy_scrape_timeout: 10s
+
+# TODO[VCC-025]: Vault all cleartext secrets/passwords
+# See above the vaulted solution example for keepalive_auth_pass.
+# use: source /home/vagrant/.venv/bin/activate to activate the ansible virtualenv
+# then: ansible-vault encrypt_string 'supersecret' --name 'variable_name'
+# The agreed password is specified in the project slides
+# (use 'deactivate' to exit the virtualenv)
+
+# TODO[VCC-026-FINAL]: Verify all conditions before delivering the project
+#   1) Forgejo, Authelia, and Grafana must support multiple replicas and work correctly during scale up/down
+#   2) No ports should be exposed except those managed by Traefik
+#   3) No secrets or passwords must be left in plain text in the repository
+#   4) No named Docker volumes should exist (if they do, something is likely wrong)
+#   5) All group members must be able to explain and modify the project during the oral discussion
